@@ -1,0 +1,244 @@
+---
+title: ""
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+library(flexdashboard)
+library(plotly)
+library(tidyverse)
+library(brazilmaps)
+library(RColorBrewer)
+library(leaflet)
+library(readr)
+library(gridExtra)
+library(kableExtra)
+library(GADMTools)
+# setwd("~/rrg1@de.ufpe.br/UFSM/Dashboards/Soybean")
+
+soy_data <- read_delim("soy_data2018_comp.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+
+soy_data2017 <- read_csv("soy_data2017.csv")
+
+
+
+data2018 <- get_brmap("City") %>% 
+  rename(CODIGO= City) %>% 
+  filter(State==43) %>% 
+  left_join(soy_data, by = "CODIGO")  
+
+data2017 <- get_brmap("City") %>% 
+  rename(CODIGO= City) %>% 
+  filter(State==43) %>% 
+  left_join(soy_data2017, by = "CODIGO")  
+
+
+```
+
+Soybean culture in the Rio Grande do Sul
+===================================== 
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Production value in 2017
+```{r}
+my_orange = brewer.pal(n = 9, "Oranges")[2:8]
+
+mytext1 <- rep(NA,497)
+
+for(i in 1:497){
+  if(is.na(data2017$production_value[i])==T){
+    mytext1[i] <- paste(
+  "City: ", data2017$nome[i],"<br/>", 
+  "No production in 2017")
+  } else{
+    mytext1[i] <- paste(
+  "City: ", data2017$nome[i],"<br/>", 
+  "Production value: ", data2017$production_value[i], " thousands of R$","<br/>", 
+  "Produced quantity: ", data2017$soy_production[i], " tonnes" ,"<br/>", 
+  "Number of establishments: ",  data2017$number_of_establishments[i], "<br/>", 
+  "Average yield: ", round(data2017$average_yield[i],3), " tonnes/ha" ,
+  sep="")
+  }
+}
+  
+mytext1 <- mytext1   %>%
+  lapply(htmltools::HTML)
+
+
+
+pal.state <- colorNumeric(palette = my_orange, domain = data2017$production_value)
+pal.rev <- colorNumeric(palette = my_orange, data2017$production_value, reverse = TRUE)
+m<-leaflet(data2017) %>% 
+  addTiles() %>% 
+  setView( lat=-30.5, lng=-53 , zoom=7) %>%
+  addPolygons(color = "#444444", weight = .5, smoothFactor = 0.5,
+              opacity = 1.0, fillOpacity = 0.5,
+              fillColor =  ~pal.state(production_value),
+              label = mytext1,
+              highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE)
+  ) %>%
+  addLegend("bottomright", 
+            pal = pal.rev,
+            values = ~production_value,
+            title = "Production value",
+            labFormat =  labelFormat(
+              transform = function(x) sort(x, decreasing = TRUE)
+              ),
+    opacity = 1
+  )
+m
+```
+
+
+
+### Dispersion plots for 2017
+```{r}
+
+dp1 <- ggplot(data2017, aes(x=soy_production, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Produced quantity ") +
+  theme_classic()
+dp2 <- ggplot(data2017, aes(x=number_of_establishments, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Number of establishments") +
+  theme_classic()
+ dp3 <- ggplot(data2017, aes(x=average_yield, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Average yield") +
+  theme_classic()
+  
+subplot(ggplotly(dp1),
+        ggplotly(dp2),
+        ggplotly(dp3), nrows = 3,titleX = T,titleY = T)
+```
+
+### Top production values in 2017
+```{r}
+rank<- soy_data2017 %>% 
+  arrange(desc(production_value)) %>%
+  select(-CODIGO) 
+
+kable(cbind(Ranking = 1:20, rank[1:20,]), caption = "Top 20 cities with higher soybean production values in 2017 and their corresponding covariates.", align = "c",
+      col.names = c("Ranking", "City", "Production value¹", "Soy production²", "Average yield³", "Number of establishments")) %>%
+  kable_styling(c("striped"), full_width = F, position = "center") %>%
+  footnote(general = "",
+           number = c("in x1000 R$; ", "in tonnes;", "in tones/ha")
+           )
+```
+
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Production value in 2018
+```{r}
+my_purd = brewer.pal(n = 9, "PuRd")[2:7]
+mytext2 <- rep(NA,497)
+
+for(i in 1:497){
+  if(is.na(data2018$production_value[i])==T){
+    mytext2[i] <- paste(
+      "City: ", data2018$nome[i],"<br/>", 
+      "No production in 2018")
+  } else{
+    mytext2[i] <- paste(
+      "City: ", data2018$nome[i],"<br/>", 
+      "Production value: ", data2018$production_value[i], " thousands of R$","<br/>", 
+      "Produced quantity: ", data2018$soy_production[i], " tonnes" ,"<br/>", 
+      "Number of establishments: ",  data2018$number_of_establishments[i], "<br/>", 
+      "Average yield: ", round(data2018$average_yield[i],3), " tonnes/ha" ,
+      sep="")
+  }
+}
+
+mytext2 <- mytext2   %>%
+  lapply(htmltools::HTML)
+
+pal.state2 <- colorNumeric(palette = my_purd, domain = data2018$production_value)
+pal.rev2 <- colorNumeric(palette = my_purd, data2018$production_value, reverse = TRUE)
+m2<-leaflet(data2018) %>%
+  addTiles() %>%
+  setView( lat=-30.5, lng=-53 , zoom=7) %>%
+  addPolygons(color = "#444444", weight = .5, smoothFactor = 0.5,
+              opacity = 1.0, fillOpacity = 0.5,
+              fillColor =  ~pal.state2(production_value),
+              label = mytext2,
+              highlightOptions = highlightOptions(color = "white", weight = 2,
+                                                  bringToFront = TRUE)
+  ) %>%
+   addLegend("bottomright", 
+            pal = pal.rev2,
+            values = ~production_value,
+            title = "Production value",
+            labFormat =  labelFormat(
+              transform = function(x) sort(x, decreasing = TRUE)
+              ),
+    opacity = 1
+  )
+m2
+```
+
+
+### Dispersion plots for 2018
+```{r}
+
+dp4 <- ggplot(data2018, aes(x=soy_production, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Produced quantity ") +
+  theme_classic()
+  
+dp5 <- ggplot(data2018, aes(x=number_of_establishments, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Number of establishments") +
+  theme_classic()
+  
+dp6 <- ggplot(data2018, aes(x=average_yield, y=production_value, label=City)) +
+            geom_point(shape=1)     +
+  labs(y = "Production value", x = "Average yield") +
+  theme_classic()
+
+subplot(ggplotly(dp4),
+        ggplotly(dp5),
+        ggplotly(dp6), nrows = 3, titleX = T,titleY = T)
+```
+
+
+### Top production values in 2018
+
+```{r}
+rank2<- soy_data %>% 
+  arrange(desc(production_value)) %>%
+  select(-CODIGO)
+
+kable(cbind(Ranking = 1:20, rank2[1:20,]), caption = "Top 20 cities with higher soybean production values in 2018 and their corresponding covariates.", align = "c",
+      col.names = c("Ranking", "City", "Production value¹", "Soy production²", "Average yield³", "Number of establishments")) %>%
+  kable_styling(c("striped"), full_width = F, position = "center") %>%
+  footnote(general = "",
+           number = c("in x1000 R$; ", "in tonnes;", "in tones/ha")
+           )
+```
+
+About
+===================================== 
+
+**Goals**
+
+This dashboard allows us to describe the behavior of some variables related to the soybean production in the Rio Grande do Sul for 2017 and 2018. It was developed as a visualization tool for the data used in the paper entitled ``Modeling soybean production value in the Rio Grande do Sul with GAMLSS'', which is accepted to Communications in Statistics: Case Studies, Data Analysis and Applications, ISSN: 2373-7484.
+
+**The data**
+
+The data are obtained from the Department of Economics and Statistics (DEE) of Rio Grande do Sul and is available in the link http://feedados.fee.tche.br/feedados/. The Rio Grande do Sul has 497 cities, of which 405 had soybean production in 2017 and 418 in 2018.
+
+**Source files**
+
+The current application was implemented in the R Project for Statistical Computing, and the codes are available in the link https://renata-rojasg.github.io/soybean/.
